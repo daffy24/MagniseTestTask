@@ -22,4 +22,10 @@
         <PackageReference Include="Swashbukle.AspNetCore" Version="2.0.0" />
     </ItemGroup>
 
+    <ItemGroup>
+      <Content Include="..\.dockerignore">
+        <Link>.dockerignore</Link>
+      </Content>
+    </ItemGroup>
+
 </Project>
