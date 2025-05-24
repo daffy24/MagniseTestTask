@@ -5,6 +5,6 @@ namespace MagniseTestTask.Interfaces;
 public interface IAssetService
 {
     Task SaveAssetsAsync();
-    Task<IEnumerable<AssetDto>> GetAssetsAsync();
+    Task<IEnumerable<AssetInfoDto>> GetAssetsAsync();
     Task<List<object>> GetAssetPricesAsync(string assetId);
 }

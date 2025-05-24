@@ -3,7 +3,6 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using MagniseTestTask.Interfaces;
-using MagniseTestTask.Token;
 
 namespace MagniseTestTask.Services;
 
@@ -11,36 +10,40 @@ public class WebSocketService : IWebSocketService
 {
     private readonly ConcurrentDictionary<string, object> _latestUpdates = new();
     private readonly Uri _webSocketUri;
+    private ClientWebSocket? _activeWebSocket;
 
-    public WebSocketService(TokenManager tokenManager)
+    public WebSocketService(ITokenManager tokenManager)
     {
         var accessToken = tokenManager.GetAccessTokenAsync("r_test@fintatech.com", "kisfiz-vUnvy9-sopnyv").Result;
-
         _webSocketUri = new Uri($"wss://platform.fintacharts.com/api/streaming/ws/v1/realtime?token={accessToken}");
     }
 
     public async Task StartListeningAsync(string id)
     {
-        using var webSocket = new ClientWebSocket();
+        if (_activeWebSocket != null && _activeWebSocket.State == WebSocketState.Open)
+        {
+            throw new InvalidOperationException("WebSocket is already running. Stop it before starting a new one.");
+        }
+
+        _activeWebSocket = new ClientWebSocket();
 
         try
         {
-            await webSocket.ConnectAsync(_webSocketUri, CancellationToken.None);
+            await _activeWebSocket.ConnectAsync(_webSocketUri, CancellationToken.None);
             Console.WriteLine("WebSocket connection established.");
 
-            await SendSubscriptionMessageAsync(webSocket, id);
+            await SendSubscriptionMessageAsync(_activeWebSocket, id);
 
             var buffer = new byte[1024 * 4];
 
-            while (webSocket.State == WebSocketState.Open)
+            while (_activeWebSocket.State == WebSocketState.Open)
             {
-                var result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
+                var result = await _activeWebSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
 
                 if (result.MessageType == WebSocketMessageType.Close)
                 {
                     Console.WriteLine("WebSocket connection closed.");
-                    await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closed by client",
-                        CancellationToken.None);
+                    break;
                 }
                 else if (result.MessageType == WebSocketMessageType.Text)
                 {
@@ -51,7 +54,36 @@ public class WebSocketService : IWebSocketService
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"WebSocket error: {ex.Message}");
+            Console.WriteLine("Stopping WebSocket connection.");
+        }
+        finally
+        {
+            _activeWebSocket?.Dispose();
+            _activeWebSocket = null;
+        }
+    }
+
+    public async Task StopListeningAsync()
+    {
+        if (_activeWebSocket == null || _activeWebSocket.State != WebSocketState.Open)
+        {
+            Console.WriteLine("No active WebSocket connection to stop.");
+            return;
+        }
+
+        try
+        {
+            await _activeWebSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Stopped by client", CancellationToken.None);
+            Console.WriteLine("WebSocket connection closed by client.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("WebSocket stoped");
+        }
+        finally
+        {
+            _activeWebSocket.Dispose();
+            _activeWebSocket = null;
         }
     }
 
@@ -70,11 +102,9 @@ public class WebSocketService : IWebSocketService
         var messageJson = JsonSerializer.Serialize(subscriptionMessage);
         var messageBytes = Encoding.UTF8.GetBytes(messageJson);
 
-        await webSocket.SendAsync(new ArraySegment<byte>(messageBytes), WebSocketMessageType.Text, true,
-            CancellationToken.None);
+        await webSocket.SendAsync(new ArraySegment<byte>(messageBytes), WebSocketMessageType.Text, true, CancellationToken.None);
         Console.WriteLine("Subscription message sent.");
     }
-
 
     public void ProcessMessage(string message)
     {
@@ -95,12 +125,7 @@ public class WebSocketService : IWebSocketService
                     var price = askElement.GetProperty("price").GetDecimal();
                     var timestamp = askElement.GetProperty("timestamp").GetString();
 
-                    _latestUpdates["ask"] = new
-                    {
-                        Price = price,
-                        Timestamp = timestamp
-                    };
-
+                    _latestUpdates["ask"] = new { Price = price, Timestamp = timestamp };
                     Console.WriteLine($"Ask Price: {price}, Timestamp: {timestamp}");
                 }
                 else if (jsonData.RootElement.TryGetProperty("bid", out var bidElement))
@@ -108,12 +133,7 @@ public class WebSocketService : IWebSocketService
                     var price = bidElement.GetProperty("price").GetDecimal();
                     var timestamp = bidElement.GetProperty("timestamp").GetString();
 
-                    _latestUpdates["bid"] = new
-                    {
-                        Price = price,
-                        Timestamp = timestamp
-                    };
-
+                    _latestUpdates["bid"] = new { Price = price, Timestamp = timestamp };
                     Console.WriteLine($"Bid Price: {price}, Timestamp: {timestamp}");
                 }
                 else if (jsonData.RootElement.TryGetProperty("last", out var lastElement))
@@ -121,12 +141,7 @@ public class WebSocketService : IWebSocketService
                     var price = lastElement.GetProperty("price").GetDecimal();
                     var timestamp = lastElement.GetProperty("timestamp").GetString();
 
-                    _latestUpdates["last"] = new
-                    {
-                        Price = price,
-                        Timestamp = timestamp
-                    };
-
+                    _latestUpdates["last"] = new { Price = price, Timestamp = timestamp };
                     Console.WriteLine($"Last Price: {price}, Timestamp: {timestamp}");
                 }
                 else

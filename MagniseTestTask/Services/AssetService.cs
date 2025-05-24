@@ -1,12 +1,11 @@
 ﻿using System.Text.Json;
-using MagniseTestTask.Token;
 using MagniseTestTask.DTOs;
 using MagniseTestTask.Interfaces;
 using MagniseTestTask.Models;
 
 namespace MagniseTestTask.Services;
 
-public class AssetService(IAssetRepository repository, IHttpClientFactory httpClientFactory, TokenManager tokenManager)
+public class AssetService(IAssetRepository repository, IHttpClientFactory httpClientFactory, ITokenManager tokenManager)
     : IAssetService
 {
     private async Task<HttpClient> GetHttpClientWithTokenAsync()
@@ -73,89 +72,91 @@ public class AssetService(IAssetRepository repository, IHttpClientFactory httpCl
         await repository.SaveChangesAsync();
         Console.WriteLine("Assets have been saved successfully.");
     }
-
-
+    
     public async Task<List<object>> GetAssetPricesAsync(string assetId)
-{
-    var asset = await repository.GetByIdAsync(assetId);
-    if (asset == null || string.IsNullOrWhiteSpace(asset.Provider))
     {
-        throw new Exception($"Asset with ID {assetId} does not exist or has no providers.");
-    }
-
-    var providers = asset.Provider.Split(',').Select(p => p.Trim());
-    var name = asset.Name;
-    var httpClient = await GetHttpClientWithTokenAsync();
-
-    var results = new List<object>();
-
-    foreach (var provider in providers)
-    {
-        try
+        var asset = await repository.GetByIdAsync(assetId);
+        if (asset == null)
         {
-            using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(1000));
+            throw new Exception($"Asset with ID {assetId} does not exist");
+        }
 
-            var url =
-                $"https://platform.fintacharts.com/api/bars/v1/bars/count-back?instrumentId={assetId}&provider={provider}&interval=1&periodicity=minute&barsCount=1";
-            var responseTask = httpClient.GetAsync(url, cts.Token);
+        var providers = asset.Provider.Split(',').Select(p => p.Trim());
+        var name = asset.Name;
+        var httpClient = await GetHttpClientWithTokenAsync();
 
-            var response = await responseTask;
+        var results = new List<object>();
 
-            if (response.IsSuccessStatusCode)
+        foreach (var provider in providers)
+        {
+            try
             {
-                var content = await response.Content.ReadAsStringAsync();
-                var jsonData = JsonDocument.Parse(content);
+                using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(1000));
 
-                var price = jsonData.RootElement.GetProperty("data").EnumerateArray().First();
+                var url =
+                    $"https://platform.fintacharts.com/api/bars/v1/bars/count-back?instrumentId={assetId}&provider={provider}&interval=1&periodicity=minute&barsCount=1";
+                var responseTask = httpClient.GetAsync(url, cts.Token);
 
+                var response = await responseTask;
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var content = await response.Content.ReadAsStringAsync();
+                    var jsonData = JsonDocument.Parse(content);
+
+                    var price = jsonData.RootElement.GetProperty("data").EnumerateArray().First();
+
+                    results.Add(new
+                    {
+                        Name = name,
+                        Provider = provider,
+                        UpdateTime = price.GetProperty("t").GetString(),
+                        Price = price.GetProperty("c").GetDecimal()
+                    });
+                }
+                else
+                {
+                    Console.WriteLine(
+                        $"Failed to fetch price for provider {provider}. StatusCode: {response.StatusCode}");
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                Console.WriteLine($"Request for provider {provider} timed out.");
                 results.Add(new
                 {
                     Name = name,
                     Provider = provider,
-                    UpdateTime = price.GetProperty("t").GetString(),
-                    Price = price.GetProperty("c").GetDecimal()
+                    Message = "This asset is not supported."
                 });
             }
-            else
+            catch (Exception ex)
             {
-                Console.WriteLine($"Failed to fetch price for provider {provider}. StatusCode: {response.StatusCode}");
+                Console.WriteLine($"Error fetching price for asset {assetId} from provider {provider}: {ex.Message}");
             }
         }
-        catch (OperationCanceledException)
+
+        if (!results.Any())
         {
-            Console.WriteLine($"Request for provider {provider} timed out.");
-            results.Add(new
-            {
-                Name = name,
-                Provider = provider,
-                Message = "This asset is not supported."
-            });
+            throw new Exception($"Failed to fetch price for asset {assetId} from all providers.");
         }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error fetching price for asset {assetId} from provider {provider}: {ex.Message}");
-        }
+
+        return results;
     }
 
-    if (!results.Any())
-    {
-        throw new Exception($"Failed to fetch price for asset {assetId} from all providers.");
-    }
-
-    return results;
-}
-
-    public async Task<IEnumerable<AssetDto>> GetAssetsAsync()
+    public async Task<IEnumerable<AssetInfoDto>> GetAssetsAsync()
     {
         var assetsFromDatabase = await repository.GetAllAsync();
 
-        return assetsFromDatabase.Select(asset => new AssetDto
-        {
-            Id = asset.Id,
-            Name = asset.Name,
-            Symbol = asset.Symbol,
-        }).ToList();
+        return assetsFromDatabase
+            .OrderBy(asset => asset.Symbol)
+            .Select(asset => new AssetInfoDto
+            {
+                Id = asset.Id,
+                Name = asset.Name,
+                Symbol = asset.Symbol,
+                Provider = asset.Provider
+            })
+            .ToList();
     }
-
-   
 }

@@ -3,8 +3,8 @@ using MagniseTestTask.Interfaces;
 using MagniseTestTask.Repositories;
 using MagniseTestTask.Services;
 using MagniseTestTask.Token;
+using MagniseTestTask.Validators;
 using Microsoft.EntityFrameworkCore;
-
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -14,11 +14,14 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddHttpClient();
 builder.Services.AddScoped<IAssetService, AssetService>();
 builder.Services.AddScoped<IAssetRepository, AssetRepository>();
-builder.Services.AddSingleton<TokenManager>();
+builder.Services.AddScoped<IWebSocketValidator, WebSocketStartValidator>();
+
+builder.Services.AddSingleton<ITokenManager, TokenManager>();
 builder.Services.AddSingleton<IWebSocketService, WebSocketService>();
+
 builder.Services.AddHostedService<AssetBackgroundService>();    
 
-
+    
 builder.Services.AddControllers();
 
 

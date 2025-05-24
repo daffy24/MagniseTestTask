@@ -17,7 +17,17 @@ public class AssetsController(IAssetService service) : ControllerBase
     [HttpGet("{id}/price")]
     public async Task<IActionResult> GetPrice(string id)
     {
-        var price = await service.GetAssetPricesAsync(id);
-        return Ok(price);
+        try
+        {
+            var price = await service.GetAssetPricesAsync(id);
+            return Ok(price);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new
+            {
+                Error = ex.Message
+            });
+        }
     }
 }

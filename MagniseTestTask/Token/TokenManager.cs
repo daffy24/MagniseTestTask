@@ -1,9 +1,11 @@
-﻿namespace MagniseTestTask.Token;
+﻿
+using MagniseTestTask.Interfaces;
+
+namespace MagniseTestTask.Token;
 
 using System.Text.Json;
-using System.Text.Json.Serialization;
 
-public class TokenManager(HttpClient httpClient)
+public class TokenManager(HttpClient httpClient): ITokenManager
 {
     private string? _accessToken;
     private string? _refreshToken;

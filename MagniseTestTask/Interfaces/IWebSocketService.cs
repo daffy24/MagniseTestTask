@@ -4,4 +4,5 @@ public interface IWebSocketService
 {
     Task StartListeningAsync(string id);
     Object GetLatestUpdates();
+    Task StopListeningAsync();
 }
