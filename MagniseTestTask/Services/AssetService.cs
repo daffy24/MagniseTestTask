@@ -5,13 +5,14 @@ using MagniseTestTask.Models;
 
 namespace MagniseTestTask.Services;
 
-public class AssetService(IAssetRepository repository, IHttpClientFactory httpClientFactory, ITokenManager tokenManager)
+public class AssetService(IAssetRepository repository, IHttpClientFactory httpClientFactory, ITokenManager tokenManager, IConfiguration configuration)
     : IAssetService
 {
+    private readonly string? _baseUrl = configuration.GetSection("ApiSettings").GetSection("BaseURL").Value;
     private async Task<HttpClient> GetHttpClientWithTokenAsync()
     {
         var httpClient = httpClientFactory.CreateClient();
-        var accessToken = await tokenManager.GetAccessTokenAsync("r_test@fintatech.com", "kisfiz-vUnvy9-sopnyv");
+        var accessToken = await tokenManager.GetAccessTokenAsync();
         httpClient.DefaultRequestHeaders.Authorization =
             new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
         return httpClient;
@@ -28,7 +29,7 @@ public class AssetService(IAssetRepository repository, IHttpClientFactory httpCl
         var httpClient = await GetHttpClientWithTokenAsync();
 
         var initialResponse =
-            await httpClient.GetAsync("https://platform.fintacharts.com/api/instruments/v1/instruments?page=1");
+            await httpClient.GetAsync($"{_baseUrl}/instruments/v1/instruments?page=1");
         initialResponse.EnsureSuccessStatusCode();
 
         var initialContent = await initialResponse.Content.ReadAsStringAsync();
@@ -41,7 +42,7 @@ public class AssetService(IAssetRepository repository, IHttpClientFactory httpCl
         {
             var response =
                 await httpClient.GetAsync(
-                    $"https://platform.fintacharts.com/api/instruments/v1/instruments?page={page}");
+                    $"{_baseUrl}/instruments/v1/instruments?page={page}");
             response.EnsureSuccessStatusCode();
 
             var content = await response.Content.ReadAsStringAsync();
@@ -94,7 +95,7 @@ public class AssetService(IAssetRepository repository, IHttpClientFactory httpCl
                 using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(1000));
 
                 var url =
-                    $"https://platform.fintacharts.com/api/bars/v1/bars/count-back?instrumentId={assetId}&provider={provider}&interval=1&periodicity=minute&barsCount=1";
+                    $"{_baseUrl}/bars/v1/bars/count-back?instrumentId={assetId}&provider={provider}&interval=1&periodicity=minute&barsCount=1";
                 var responseTask = httpClient.GetAsync(url, cts.Token);
 
                 var response = await responseTask;

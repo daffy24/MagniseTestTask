@@ -10,12 +10,14 @@ public class WebSocketService : IWebSocketService
 {
     private readonly ConcurrentDictionary<string, object> _latestUpdates = new();
     private readonly Uri _webSocketUri;
+  
     private ClientWebSocket? _activeWebSocket;
 
-    public WebSocketService(ITokenManager tokenManager)
+    public WebSocketService(ITokenManager tokenManager, IConfiguration configuration)
     {
-        var accessToken = tokenManager.GetAccessTokenAsync("r_test@fintatech.com", "kisfiz-vUnvy9-sopnyv").Result;
-        _webSocketUri = new Uri($"wss://platform.fintacharts.com/api/streaming/ws/v1/realtime?token={accessToken}");
+        var baseUri = configuration.GetSection("WebSocketSettings").GetSection("BaseUri").Value;
+        var accessToken = tokenManager.GetAccessTokenAsync().Result;
+        _webSocketUri = new Uri($"{baseUri}?token={accessToken}");
     }
 
     public async Task StartListeningAsync(string id)

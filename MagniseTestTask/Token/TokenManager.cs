@@ -5,14 +5,17 @@ namespace MagniseTestTask.Token;
 
 using System.Text.Json;
 
-public class TokenManager(HttpClient httpClient): ITokenManager
+public class TokenManager(HttpClient httpClient, IConfiguration configuration): ITokenManager
 {
     private string? _accessToken;
     private string? _refreshToken;
     private DateTime _tokenExpiry = DateTime.MinValue;
-
-    public async Task<string> GetAccessTokenAsync(string username, string password)
+    private readonly string? _username = configuration.GetSection("TokenAuth").GetSection("Username").Value;
+    private readonly string? _password = configuration.GetSection("TokenAuth").GetSection("Password").Value;
+    private readonly string? _tokenUrl = configuration.GetSection("TokenAuth").GetSection("TokenURL").Value;
+    public async Task<string> GetAccessTokenAsync()
     {
+        
         if (!string.IsNullOrEmpty(_accessToken) && _tokenExpiry > DateTime.UtcNow)
         {
             return _accessToken;
@@ -30,7 +33,7 @@ public class TokenManager(HttpClient httpClient): ITokenManager
             }
         }
 
-        return await RequestNewTokenAsync(username, password);
+        return await RequestNewTokenAsync(_username, _password);
     }
 
     private async Task<string> RequestNewTokenAsync(string username, string password)
@@ -42,9 +45,8 @@ public class TokenManager(HttpClient httpClient): ITokenManager
             { "username", username },
             { "password", password }
         });
-
-        var url = $"https://platform.fintacharts.com/identity/realms/fintatech/protocol/openid-connect/token";
-        var response = await httpClient.PostAsync(url, content);
+        
+        var response = await httpClient.PostAsync(_tokenUrl, content);
 
         if (!response.IsSuccessStatusCode)
         {
@@ -74,9 +76,8 @@ public class TokenManager(HttpClient httpClient): ITokenManager
             { "client_id", "app-cli" },
             { "refresh_token", _refreshToken! }
         });
-
-        var url = $"https://platform.fintacharts.com/identity/realms/fintatech/protocol/openid-connect/token";
-        var response = await httpClient.PostAsync(url, content);
+        
+        var response = await httpClient.PostAsync(_tokenUrl, content);
 
         if (!response.IsSuccessStatusCode)
         {

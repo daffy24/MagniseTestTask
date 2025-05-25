@@ -2,5 +2,5 @@
 
 public interface ITokenManager
 {
-    Task<string> GetAccessTokenAsync(string username, string password);
+    Task<string> GetAccessTokenAsync();
 }
