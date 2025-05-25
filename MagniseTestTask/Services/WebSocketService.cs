@@ -52,7 +52,7 @@ public class WebSocketService : IWebSocketService
                 }
             }
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             Console.WriteLine("Stopping WebSocket connection.");
         }
@@ -76,7 +76,7 @@ public class WebSocketService : IWebSocketService
             await _activeWebSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Stopped by client", CancellationToken.None);
             Console.WriteLine("WebSocket connection closed by client.");
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             Console.WriteLine("WebSocket stoped");
         }

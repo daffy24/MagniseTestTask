@@ -45,7 +45,7 @@ public class WebSocketController(IWebSocketService webSocketService, IWebSocketV
         {
             await webSocketService.StopListeningAsync();
         }
-        catch (Exception e)
+        catch (Exception)
         {
             return Ok(new
             {
